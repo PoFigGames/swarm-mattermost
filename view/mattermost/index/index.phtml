@@ -1,0 +1,755 @@
+<?php
+/**
+ * Mattermost Perforce Swarm module
+ *
+ * @copyright   2026 PoFig Games Studio. All rights reserved.
+ * @license     Please see LICENSE.txt in top-level readme folder of this distribution.
+ *
+ * Standalone configuration page for the Mattermost integration. Everything the page
+ * needs (styles, markup, script) lives in this file so it survives Swarm upgrades
+ * together with the module and needs no front-end build step.
+ */
+$this->headTitle('Mattermost');
+// The Swarm layout publishes the session token through the csrf() view helper
+// (<body data-csrf="...">); use the same helper here, with the controller value as backup.
+$csrfToken = (string) $this->csrfToken;
+try {
+    $csrfToken = (string) $this->csrf() ?: $csrfToken;
+} catch (\Throwable $e) {
+    // helper not available: keep the controller value, the page also reads <body data-csrf>
+}
+$settings = [
+    'baseUrl'    => (string) $this->baseUrl,
+    'apiVersion' => (string) $this->apiVersion,
+    'configId'   => (string) $this->configId,
+    'csrfToken'  => $csrfToken,
+];
+?>
+<style>
+#mm-config { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; font-size: 14px; line-height: 1.45; }
+#mm-config h1 { font-size: 22px; margin: 0 0 4px; }
+#mm-config h2 { font-size: 17px; margin: 0; }
+#mm-config .mm-muted { color: #666; }
+#mm-config .mm-card { background: #fff; border: 1px solid #dcdfe3; border-radius: 6px; padding: 16px 20px; margin-top: 20px; }
+#mm-config .mm-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+#mm-config #mm-list { overflow-x: auto; }
+#mm-config table { width: 100%; border-collapse: collapse; }
+#mm-config th, #mm-config td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eceff1; vertical-align: top; }
+#mm-config th { font-weight: 600; color: #444; font-size: 13px; white-space: nowrap; }
+#mm-config td.mm-id { white-space: nowrap; }
+#mm-config td.mm-code { overflow-wrap: anywhere; }
+#mm-config td.mm-actions { white-space: nowrap; text-align: right; }
+#mm-config .mm-chip { display: inline-block; background: #eef1f5; border-radius: 10px; padding: 1px 8px; margin: 1px 4px 1px 0; font-size: 12px; }
+#mm-config .mm-btn { border: 1px solid #b8bec6; background: #f7f8fa; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+#mm-config .mm-btn:hover { background: #eceff3; }
+#mm-config .mm-btn[disabled] { opacity: .5; cursor: default; }
+#mm-config .mm-btn-primary { background: #1565c0; border-color: #1565c0; color: #fff; }
+#mm-config .mm-btn-primary:hover { background: #0d4fa0; }
+#mm-config .mm-btn-danger { color: #b00020; }
+#mm-config .mm-btn-link { border: none; background: none; color: #1565c0; padding: 4px 6px; }
+#mm-config .mm-alert { border-radius: 4px; padding: 10px 14px; margin-top: 16px; }
+#mm-config .mm-alert-error { background: #fdecea; color: #7f1d1d; border: 1px solid #f5c2c0; }
+#mm-config .mm-alert-warn { background: #fff7e0; color: #6b4e00; border: 1px solid #f2dc9b; }
+#mm-config .mm-alert-ok { background: #e8f5e9; color: #1b5e20; border: 1px solid #b6dfb9; }
+#mm-config .mm-empty { padding: 24px; text-align: center; color: #777; }
+#mm-config .mm-code { font-family: Menlo, Consolas, monospace; font-size: 12px; }
+#mm-config dialog { border: 1px solid #cfd4da; border-radius: 8px; padding: 0; width: 720px; max-width: 95vw; }
+#mm-config dialog::backdrop { background: rgba(0,0,0,.35); }
+#mm-config .mm-modal-head { padding: 16px 20px 8px; }
+#mm-config .mm-modal-body { padding: 8px 20px; max-height: 70vh; overflow: auto; }
+#mm-config .mm-modal-foot { padding: 12px 20px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #eceff1; }
+#mm-config .mm-field { margin: 12px 0; }
+#mm-config .mm-field label.mm-label { display: block; font-weight: 600; margin-bottom: 2px; }
+#mm-config .mm-hint { color: #666; font-size: 12px; margin-bottom: 4px; }
+#mm-config .mm-field input[type=text], #mm-config .mm-field input[type=password], #mm-config .mm-field input[type=number], #mm-config .mm-field input[type=url] { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #b8bec6; border-radius: 4px; font-size: 13px; }
+#mm-config .mm-field input.mm-invalid { border-color: #c62828; }
+#mm-config .mm-field .mm-error { color: #c62828; font-size: 12px; margin-top: 3px; }
+#mm-config .mm-check { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
+#mm-config .mm-check input { margin-top: 3px; }
+#mm-config .mm-check .mm-hint { margin: 0; }
+#mm-config .mm-section { border-top: 1px solid #eceff1; margin-top: 16px; padding-top: 12px; }
+#mm-config .mm-section h3 { font-size: 14px; margin: 0 0 4px; }
+#mm-config .mm-pc-row { display: grid; grid-template-columns: 1fr 2fr auto; gap: 8px; align-items: start; margin-bottom: 8px; }
+#mm-config .mm-pc-row input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #b8bec6; border-radius: 4px; font-size: 13px; }
+#mm-config .mm-notify { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+#mm-config .mm-toast { position: fixed; right: 20px; bottom: 20px; z-index: 10000; max-width: 420px; box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+</style>
+
+<div id="mm-config" data-settings="<?php echo $this->escapeHtmlAttr(json_encode($settings)); ?>">
+    <h1 data-i18n="title">Mattermost Configuration</h1>
+    <div class="mm-muted" data-i18n="subtitle">Configure Mattermost integration to send notifications to your team's servers.</div>
+    <div id="mm-notice"></div>
+
+    <div class="mm-card">
+        <div class="mm-card-head">
+            <div>
+                <h2 data-i18n="workspacesTitle">Servers</h2>
+                <div class="mm-muted" data-i18n="workspacesSubtitle">Configure one or more Mattermost servers for notifications.</div>
+            </div>
+            <button type="button" class="mm-btn mm-btn-primary" id="mm-add" data-i18n="addWorkspace">Add Server</button>
+        </div>
+        <div id="mm-list"><div class="mm-empty">Loading...</div></div>
+    </div>
+
+    <dialog id="mm-dialog">
+        <form method="dialog" id="mm-form" novalidate>
+            <div class="mm-modal-head">
+                <h2 id="mm-dialog-title">Add Server</h2>
+                <div class="mm-muted" data-i18n="modalSubtitle">Configure your Mattermost server settings.</div>
+            </div>
+            <div class="mm-modal-body" id="mm-form-body"></div>
+            <div class="mm-modal-foot">
+                <button type="button" class="mm-btn" id="mm-cancel">Cancel</button>
+                <button type="submit" class="mm-btn mm-btn-primary" id="mm-save">Save</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="mm-confirm">
+        <div class="mm-modal-head"><h2 id="mm-confirm-title">Delete Server</h2></div>
+        <div class="mm-modal-body">
+            <p id="mm-confirm-text"></p>
+            <p class="mm-muted" data-i18n="deleteWorkspaceConfirmWarningSecond">This action cannot be undone.</p>
+        </div>
+        <div class="mm-modal-foot">
+            <button type="button" class="mm-btn" id="mm-confirm-cancel">Cancel</button>
+            <button type="button" class="mm-btn mm-btn-danger" id="mm-confirm-ok">Delete</button>
+        </div>
+    </dialog>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var root     = document.getElementById('mm-config');
+    var settings = JSON.parse(root.getAttribute('data-settings') || '{}');
+    var baseUrl  = settings.baseUrl || '';
+    var apiBase  = baseUrl + '/api/' + (settings.apiVersion || 'v11') + '/configurations/' + (settings.configId || 'mattermost');
+
+    // Built-in English strings. The page overlays the "mattermost" namespace of
+    // /locales/<lang>/configuration.json when it is available, so translations added
+    // to that file are picked up automatically.
+    var strings = {
+        title: 'Mattermost Configuration',
+        subtitle: "Configure Mattermost integration to send notifications to your team's servers.",
+        workspacesTitle: 'Servers',
+        workspacesSubtitle: 'Configure one or more Mattermost servers for notifications.',
+        addWorkspace: 'Add Server',
+        updateWorkspace: 'Update Server',
+        modalAddTitle: 'Add Server',
+        modalEditTitle: 'Edit Server',
+        modalSubtitle: 'Configure your Mattermost server settings.',
+        workspaceIdTitle: 'Server ID',
+        workspaceIdSubtitle: 'A unique identifier for this Mattermost server.',
+        workspaceIdRequired: 'Server ID is required',
+        workspaceDuplicateName: 'A Mattermost server with this name already exists.',
+        urlTitle: 'Server URL',
+        urlSubtitle: 'Base URL of the Mattermost server, for example https://mattermost.example.com.',
+        urlPlaceholder: 'https://mattermost.example.com',
+        urlRequired: 'Server URL is required',
+        urlInvalid: 'Server URL must start with http:// or https://',
+        teamTitle: 'Team',
+        teamSubtitle: 'The team name from the Mattermost URL (https://server/<team>/channels/...). Required to resolve channel names; not needed when only channel IDs are used.',
+        teamPlaceholder: 'e.g. engineering',
+        tokenTitle: 'Bot Access Token',
+        tokenSubtitle: 'The access token of the Mattermost bot account used to authenticate and send messages to this server.',
+        tokenRequired: 'Access token is required',
+        tokenKeep: 'Leave blank to keep the stored token.',
+        projectChannelsTitle: 'Project Channels',
+        projectChannelsSubtitle: 'Map projects to Mattermost channels to route notifications.',
+        projectChannelsProjectTitle: 'Project',
+        projectChannelsProjectSubtitle: "The project ID to route. Use '*all*' for all projects, '*no_project_channel*' or '*without_project*' for special routing.",
+        projectChannelsChannelsTitle: 'Channels',
+        projectChannelsChannelsSubtitle: 'One or more Mattermost channel names (URL handles) or IDs to post notifications to for this project. The bot must be a member of each channel.',
+        channelInputPlaceholder: 'Channel name or ID',
+        channelInputHelperText: 'Separate several channels with commas',
+        addProjectChannel: 'Add Project Channel',
+        removeProjectChannel: 'Remove mapping',
+        projectRequired: 'Project ID is required',
+        channelsRequired: 'At least one channel is required',
+        summaryFileNamesTitle: 'Summary File Names',
+        summaryFileNamesSubtitle: 'Include file names in the review summary posted to Mattermost.',
+        replyFileNamesTitle: 'Reply File Names',
+        replyFileNamesSubtitle: 'Include file names as a reply in the Mattermost thread.',
+        bypassRestrictedChangelistTitle: 'Bypass Restricted Changelist',
+        bypassRestrictedChangelistSubtitle: 'Allow Mattermost notifications for restricted changelists.',
+        notifyMentionedOnlyTitle: 'Notify Mentioned Only',
+        notifyMentionedOnlySubtitle: 'Only notify users who are explicitly mentioned in a review.',
+        notifyTitle: 'Notify',
+        notifySubtitle: 'Select which user groups should receive Mattermost notifications for review events.',
+        summaryFileLimitTitle: 'Summary File Limit',
+        summaryFileLimitSubtitle: 'Maximum number of files to list in the Mattermost review summary.',
+        userEnabledTitle: 'Custom Bot User',
+        userEnabledSubtitle: 'Display Mattermost messages using a custom username and avatar instead of the bot account identity. Requires the username and profile picture override options to be enabled in the Mattermost System Console.',
+        userNameTitle: 'Bot Display Name',
+        userNameSubtitle: 'The name the bot uses when posting messages to Mattermost.',
+        userIconTitle: 'Bot Avatar URL',
+        userIconSubtitle: 'URL of the avatar image the bot uses when posting messages to Mattermost.',
+        userForceUserHeaderTitle: 'Force User Header',
+        userForceUserHeaderSubtitle: 'Force Mattermost to display the user header on every message instead of collapsing consecutive posts.',
+        workspaceTooltipsEdit: 'Edit server configuration',
+        workspaceTooltipsDelete: 'Delete this server',
+        workspaceTooltipsCannotDelete: 'At least one server must remain configured',
+        deleteWorkspaceConfirmTitle: 'Delete Server',
+        deleteWorkspaceConfirmWarning: "Are you sure you want to delete the Mattermost server '{{workspaceId}}'?",
+        deleteWorkspaceConfirmWarningSecond: 'This action cannot be undone.',
+        workspaceSavedSuccess: 'Server saved successfully',
+        workspaceDeletedSuccess: 'Server deleted successfully',
+        workspaceDeleteError: 'Failed to delete server',
+        loadError: 'Failed to load the Mattermost configuration',
+        saveError: 'Failed to save server',
+        noServers: 'No Mattermost servers configured yet.',
+        csrfMissing: 'CSRF token not found on this page. Saving will fail until the token is available; see the module README.',
+        edit: 'Edit',
+        remove: 'Delete',
+        cancel: 'Cancel',
+        save: 'Save',
+        loading: 'Loading...',
+        colChannels: 'Project channels',
+        colOptions: 'Options',
+        tokenStored: 'stored'
+    };
+
+    var notifyOptions = [
+        ['author', 'Author'],
+        ['reviewers', 'Reviewers'],
+        ['project_owners', 'Project owners'],
+        ['project_members', 'Project members'],
+        ['project_default_reviewers', 'Project default reviewers'],
+        ['branch_default_reviewers', 'Branch default reviewers'],
+        ['branch_moderators', 'Branch moderators']
+    ];
+
+    function t(key, vars) {
+        var s = strings[key] !== undefined ? strings[key] : key;
+        if (vars) {
+            Object.keys(vars).forEach(function (k) {
+                s = s.split('{{' + k + '}}').join(vars[k]);
+            });
+        }
+        return s;
+    }
+
+    function el(tag, attrs, children) {
+        var node = document.createElement(tag);
+        if (attrs) {
+            Object.keys(attrs).forEach(function (k) {
+                if (k === 'text') {
+                    node.textContent = attrs[k];
+                } else if (k === 'class') {
+                    node.className = attrs[k];
+                } else if (k.indexOf('on') === 0 && typeof attrs[k] === 'function') {
+                    node.addEventListener(k.substring(2), attrs[k]);
+                } else if (attrs[k] === true) {
+                    node.setAttribute(k, '');
+                } else if (attrs[k] !== false && attrs[k] !== null && attrs[k] !== undefined) {
+                    node.setAttribute(k, attrs[k]);
+                }
+            });
+        }
+        (children || []).forEach(function (c) {
+            if (c === null || c === undefined) {
+                return;
+            }
+            node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+        });
+        return node;
+    }
+
+    function applyStrings() {
+        root.querySelectorAll('[data-i18n]').forEach(function (node) {
+            node.textContent = t(node.getAttribute('data-i18n'));
+        });
+        document.getElementById('mm-cancel').textContent = t('cancel');
+        document.getElementById('mm-save').textContent = t('save');
+        document.getElementById('mm-confirm-cancel').textContent = t('cancel');
+        document.getElementById('mm-confirm-ok').textContent = t('remove');
+    }
+
+    // ---- CSRF ---------------------------------------------------------------------
+    function csrfToken() {
+        if (settings.csrfToken) {
+            return settings.csrfToken;
+        }
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta && meta.content) {
+            return meta.content;
+        }
+        if (document.body && document.body.getAttribute('data-csrf')) {
+            return document.body.getAttribute('data-csrf');
+        }
+        var candidates = [document.documentElement, document.body].concat(
+            Array.prototype.slice.call(document.querySelectorAll('[data-csrf],[data-csrf-token]'))
+        );
+        for (var i = 0; i < candidates.length; i++) {
+            var n = candidates[i];
+            if (n && (n.getAttribute('data-csrf') || n.getAttribute('data-csrf-token'))) {
+                return n.getAttribute('data-csrf') || n.getAttribute('data-csrf-token');
+            }
+        }
+        if (window.swarm && window.swarm.csrf) {
+            return window.swarm.csrf;
+        }
+        return '';
+    }
+
+    // ---- API ----------------------------------------------------------------------
+    function api(path, method, body) {
+        var headers = { 'Accept': 'application/json' };
+        var token   = csrfToken();
+        if (token) {
+            headers['X-CSRF-TOKEN'] = encodeURIComponent(token);
+        }
+        if (body !== undefined) {
+            headers['Content-Type'] = 'application/json';
+        }
+        return fetch(apiBase + path, {
+            method: method || 'GET',
+            credentials: 'same-origin',
+            headers: headers,
+            body: body !== undefined ? JSON.stringify(body) : undefined
+        }).then(function (res) {
+            return res.text().then(function (text) {
+                var json = null;
+                try { json = text ? JSON.parse(text) : null; } catch (e) { json = null; }
+                if (!res.ok) {
+                    var err = new Error(extractError(json) || (res.status + ' ' + res.statusText));
+                    err.status = res.status;
+                    err.payload = json;
+                    throw err;
+                }
+                return json;
+            });
+        });
+    }
+
+    function flattenMessages(value, out, prefix) {
+        if (value === null || value === undefined) {
+            return out;
+        }
+        if (typeof value === 'string') {
+            out.push(prefix ? prefix + ': ' + value : value);
+        } else if (Array.isArray(value)) {
+            value.forEach(function (v) { flattenMessages(v, out, prefix); });
+        } else if (typeof value === 'object') {
+            if (value.text || value.message) {
+                out.push(prefix ? prefix + ': ' + (value.text || value.message) : (value.text || value.message));
+                return out;
+            }
+            Object.keys(value).forEach(function (k) {
+                flattenMessages(value[k], out, prefix ? prefix + '.' + k : k);
+            });
+        } else {
+            out.push(String(value));
+        }
+        return out;
+    }
+
+    function extractError(json) {
+        if (!json) {
+            return '';
+        }
+        var out = [];
+        if (json.messages) {
+            flattenMessages(json.messages, out, '');
+        }
+        if (json.error && typeof json.error !== 'object') {
+            out.unshift(String(json.error));
+        } else if (json.error) {
+            flattenMessages(json.error, out, '');
+        }
+        return out.join('\n');
+    }
+
+    // ---- State / rendering --------------------------------------------------------
+    var workspaces = [];
+
+    function notice(kind, message, sticky) {
+        var box = document.getElementById('mm-notice');
+        box.innerHTML = '';
+        if (!message) {
+            return;
+        }
+        var node = el('div', { class: 'mm-alert mm-alert-' + kind, text: message });
+        box.appendChild(node);
+        if (!sticky) {
+            setTimeout(function () { if (node.parentNode) { node.parentNode.removeChild(node); } }, 5000);
+        }
+    }
+
+    function toast(kind, message) {
+        var node = el('div', { class: 'mm-alert mm-alert-' + kind + ' mm-toast', text: message });
+        root.appendChild(node);
+        setTimeout(function () { if (node.parentNode) { node.parentNode.removeChild(node); } }, 4000);
+    }
+
+    function load() {
+        return api('').then(function (json) {
+            var config = json && json.data && json.data.configurations ? json.data.configurations[0] : null;
+            workspaces = ((config && config.workspaces) || []).filter(function (w) { return !w.isDeleted; });
+            renderList();
+        }).catch(function (e) {
+            document.getElementById('mm-list').innerHTML = '';
+            notice('error', t('loadError') + ': ' + e.message, true);
+        });
+    }
+
+    function describeChannels(ws) {
+        var rows = ws.projectChannels || [];
+        if (!rows.length) {
+            return [el('span', { class: 'mm-muted', text: '\u2014' })];
+        }
+        return rows.map(function (row) {
+            return el('div', { class: 'mm-code' }, [
+                (row.project || '') + ' \u2192 ' + (row.channels || []).join(', ')
+            ]);
+        });
+    }
+
+    function describeOptions(ws) {
+        var chips = [];
+        if (ws.summaryFileNames) { chips.push(t('summaryFileNamesTitle')); }
+        if (ws.replyFileNames) { chips.push(t('replyFileNamesTitle')); }
+        if (ws.bypassRestrictedChangelist) { chips.push(t('bypassRestrictedChangelistTitle')); }
+        if (ws.notifyMentionedOnly) { chips.push(t('notifyMentionedOnlyTitle')); }
+        (ws.notify || []).forEach(function (n) { chips.push('@' + n); });
+        if (ws.user && ws.user.enabled && ws.user.name) { chips.push(ws.user.name); }
+        return chips.map(function (c) { return el('span', { class: 'mm-chip', text: c }); });
+    }
+
+    function renderList() {
+        var list = document.getElementById('mm-list');
+        list.innerHTML = '';
+        if (!workspaces.length) {
+            list.appendChild(el('div', { class: 'mm-empty', text: t('noServers') }));
+            return;
+        }
+        var canDelete = workspaces.length > 1;
+        var table = el('table', null, [
+            el('thead', null, [el('tr', null, [
+                el('th', { text: t('workspaceIdTitle') }),
+                el('th', { text: t('urlTitle') }),
+                el('th', { text: t('teamTitle') }),
+                el('th', { text: t('colChannels') }),
+                el('th', { text: t('colOptions') }),
+                el('th', { text: '' })
+            ])]),
+            el('tbody', null, workspaces.map(function (ws) {
+                return el('tr', null, [
+                    el('td', { class: 'mm-id' }, [el('strong', { text: ws.id || '' })]),
+                    el('td', { class: 'mm-code' }, [ws.url || el('span', { class: 'mm-muted', text: '\u2014' })]),
+                    el('td', { class: 'mm-code' }, [ws.team || el('span', { class: 'mm-muted', text: '\u2014' })]),
+                    el('td', null, describeChannels(ws)),
+                    el('td', null, describeOptions(ws)),
+                    el('td', { class: 'mm-actions' }, [
+                        el('button', {
+                            type: 'button', class: 'mm-btn mm-btn-link', title: t('workspaceTooltipsEdit'),
+                            text: t('edit'), onclick: function () { openEditor(ws); }
+                        }),
+                        el('button', {
+                            type: 'button', class: 'mm-btn mm-btn-link mm-btn-danger',
+                            title: canDelete ? t('workspaceTooltipsDelete') : t('workspaceTooltipsCannotDelete'),
+                            disabled: !canDelete, text: t('remove'),
+                            onclick: function () { confirmDelete(ws); }
+                        })
+                    ])
+                ]);
+            }))
+        ]);
+        list.appendChild(table);
+    }
+
+    // ---- Editor -------------------------------------------------------------------
+    var editing = null; // null when creating
+
+    function field(name, labelKey, hintKey, input) {
+        return el('div', { class: 'mm-field', 'data-field': name }, [
+            el('label', { class: 'mm-label', for: 'mm-f-' + name, text: t(labelKey) }),
+            hintKey ? el('div', { class: 'mm-hint', text: t(hintKey) }) : null,
+            input,
+            el('div', { class: 'mm-error', 'data-error': name })
+        ]);
+    }
+
+    function textInput(name, value, extra) {
+        var attrs = { type: 'text', id: 'mm-f-' + name, name: name, value: value || '' };
+        Object.keys(extra || {}).forEach(function (k) { attrs[k] = extra[k]; });
+        return el('input', attrs);
+    }
+
+    function checkbox(name, labelKey, hintKey, checked) {
+        var input = el('input', { type: 'checkbox', id: 'mm-f-' + name, name: name });
+        input.checked = !!checked;
+        return el('div', { class: 'mm-check' }, [
+            input,
+            el('div', null, [
+                el('label', { for: 'mm-f-' + name, text: t(labelKey) }),
+                hintKey ? el('div', { class: 'mm-hint', text: t(hintKey) }) : null
+            ])
+        ]);
+    }
+
+    function projectChannelRow(project, channels) {
+        var row = el('div', { class: 'mm-pc-row' });
+        row.appendChild(el('input', { type: 'text', 'data-pc': 'project', value: project || '', placeholder: t('projectChannelsProjectTitle') }));
+        row.appendChild(el('input', { type: 'text', 'data-pc': 'channels', value: (channels || []).join(', '), placeholder: t('channelInputPlaceholder') }));
+        row.appendChild(el('button', {
+            type: 'button', class: 'mm-btn', title: t('removeProjectChannel'), text: '\u2715',
+            onclick: function () { row.parentNode.removeChild(row); }
+        }));
+        return row;
+    }
+
+    function buildForm(ws) {
+        var body = document.getElementById('mm-form-body');
+        body.innerHTML = '';
+        var isNew = !editing;
+        var user  = ws.user || {};
+
+        body.appendChild(field('id', 'workspaceIdTitle', 'workspaceIdSubtitle',
+            textInput('id', ws.id, isNew ? {} : { readonly: true })));
+        body.appendChild(field('url', 'urlTitle', 'urlSubtitle',
+            textInput('url', ws.url, { placeholder: t('urlPlaceholder') })));
+        body.appendChild(field('team', 'teamTitle', 'teamSubtitle',
+            textInput('team', ws.team, { placeholder: t('teamPlaceholder') })));
+        body.appendChild(field('token', 'tokenTitle', 'tokenSubtitle',
+            el('input', {
+                type: 'password', id: 'mm-f-token', name: 'token', autocomplete: 'new-password',
+                placeholder: isNew ? '' : (ws.token ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 (' + t('tokenStored') + ') \u2014 ' + t('tokenKeep') : t('tokenKeep'))
+            })));
+
+        var pcSection = el('div', { class: 'mm-section' }, [
+            el('h3', { text: t('projectChannelsTitle') }),
+            el('div', { class: 'mm-hint', text: t('projectChannelsSubtitle') }),
+            el('div', { class: 'mm-hint', text: t('projectChannelsProjectSubtitle') }),
+            el('div', { class: 'mm-hint', text: t('projectChannelsChannelsSubtitle') + ' ' + t('channelInputHelperText') })
+        ]);
+        var pcList = el('div', { id: 'mm-pc-list' });
+        (ws.projectChannels || []).forEach(function (row) {
+            pcList.appendChild(projectChannelRow(row.project, row.channels));
+        });
+        pcSection.appendChild(pcList);
+        pcSection.appendChild(el('div', { class: 'mm-error', 'data-error': 'projectChannels' }));
+        pcSection.appendChild(el('button', {
+            type: 'button', class: 'mm-btn', text: '+ ' + t('addProjectChannel'),
+            onclick: function () { pcList.appendChild(projectChannelRow('', [])); }
+        }));
+        body.appendChild(pcSection);
+
+        var opts = el('div', { class: 'mm-section' }, [
+            checkbox('summaryFileNames', 'summaryFileNamesTitle', 'summaryFileNamesSubtitle', ws.summaryFileNames),
+            checkbox('replyFileNames', 'replyFileNamesTitle', 'replyFileNamesSubtitle', ws.replyFileNames),
+            checkbox('bypassRestrictedChangelist', 'bypassRestrictedChangelistTitle', 'bypassRestrictedChangelistSubtitle', ws.bypassRestrictedChangelist),
+            checkbox('notifyMentionedOnly', 'notifyMentionedOnlyTitle', 'notifyMentionedOnlySubtitle', ws.notifyMentionedOnly),
+            field('summaryFileLimit', 'summaryFileLimitTitle', 'summaryFileLimitSubtitle',
+                el('input', { type: 'number', id: 'mm-f-summaryFileLimit', name: 'summaryFileLimit', min: 1, value: ws.summaryFileLimit || 10 }))
+        ]);
+        body.appendChild(opts);
+
+        var notifyGrid = el('div', { class: 'mm-notify' });
+        notifyOptions.forEach(function (opt) {
+            var input = el('input', { type: 'checkbox', 'data-notify': opt[0], id: 'mm-n-' + opt[0] });
+            input.checked = (ws.notify || []).indexOf(opt[0]) !== -1;
+            notifyGrid.appendChild(el('div', { class: 'mm-check' }, [input, el('label', { for: 'mm-n-' + opt[0], text: opt[1] })]));
+        });
+        body.appendChild(el('div', { class: 'mm-section' }, [
+            el('h3', { text: t('notifyTitle') }),
+            el('div', { class: 'mm-hint', text: t('notifySubtitle') }),
+            notifyGrid
+        ]));
+
+        body.appendChild(el('div', { class: 'mm-section' }, [
+            checkbox('userEnabled', 'userEnabledTitle', 'userEnabledSubtitle', user.enabled !== undefined ? user.enabled : true),
+            field('userName', 'userNameTitle', 'userNameSubtitle', textInput('userName', user.name !== undefined ? user.name : 'Helix Swarm')),
+            field('userIcon', 'userIconTitle', 'userIconSubtitle', textInput('userIcon', user.icon)),
+            checkbox('userForceUserHeader', 'userForceUserHeaderTitle', 'userForceUserHeaderSubtitle', user.forceUserHeader)
+        ]));
+    }
+
+    function openEditor(ws) {
+        editing = ws || null;
+        document.getElementById('mm-dialog-title').textContent = t(ws ? 'modalEditTitle' : 'modalAddTitle');
+        document.getElementById('mm-save').textContent = t(ws ? 'updateWorkspace' : 'addWorkspace');
+        buildForm(ws || {
+            summaryFileLimit: 10,
+            notify: [],
+            projectChannels: [],
+            user: { enabled: true, name: 'Helix Swarm', icon: '', forceUserHeader: false }
+        });
+        document.getElementById('mm-dialog').showModal();
+    }
+
+    function val(name) {
+        var node = document.getElementById('mm-f-' + name);
+        return node ? node.value.trim() : '';
+    }
+
+    function checked(name) {
+        var node = document.getElementById('mm-f-' + name);
+        return !!(node && node.checked);
+    }
+
+    function setError(name, message) {
+        var box = document.querySelector('[data-error="' + name + '"]');
+        if (box) {
+            box.textContent = message || '';
+        }
+        var input = document.getElementById('mm-f-' + name);
+        if (input) {
+            input.classList.toggle('mm-invalid', !!message);
+        }
+    }
+
+    function collectForm() {
+        var errors = 0;
+        ['id', 'url', 'token', 'projectChannels', 'summaryFileLimit'].forEach(function (n) { setError(n, ''); });
+
+        var isNew = !editing;
+        var id    = val('id');
+        var url   = val('url');
+        var token = val('token');
+
+        if (!id) { setError('id', t('workspaceIdRequired')); errors++; }
+        if (isNew && workspaces.some(function (w) { return w.id === id; })) {
+            setError('id', t('workspaceDuplicateName')); errors++;
+        }
+        if (!url) { setError('url', t('urlRequired')); errors++; }
+        else if (!/^https?:\/\/[^\s\/]+/i.test(url)) { setError('url', t('urlInvalid')); errors++; }
+        if (isNew && !token) { setError('token', t('tokenRequired')); errors++; }
+
+        var projectChannels = [];
+        var pcError = '';
+        document.querySelectorAll('#mm-pc-list .mm-pc-row').forEach(function (row) {
+            var project  = row.querySelector('[data-pc="project"]').value.trim();
+            var channels = row.querySelector('[data-pc="channels"]').value.split(/[,\s]+/)
+                .map(function (c) { return c.trim(); }).filter(Boolean);
+            if (!project && !channels.length) {
+                return; // ignore fully blank rows
+            }
+            if (!project) { pcError = t('projectRequired'); }
+            else if (!channels.length) { pcError = t('channelsRequired'); }
+            projectChannels.push({ project: project, channels: channels });
+        });
+        if (pcError) { setError('projectChannels', pcError); errors++; }
+
+        var limit = parseInt(val('summaryFileLimit'), 10);
+        if (isNaN(limit) || limit < 1) { setError('summaryFileLimit', t('summaryFileLimitTitle') + ' > 0'); errors++; }
+
+        if (errors) {
+            return null;
+        }
+
+        var notify = [];
+        document.querySelectorAll('#mm-form-body [data-notify]').forEach(function (n) {
+            if (n.checked) { notify.push(n.getAttribute('data-notify')); }
+        });
+
+        var payload = {
+            id: id,
+            url: url,
+            team: val('team'),
+            projectChannels: projectChannels,
+            summaryFileNames: checked('summaryFileNames'),
+            replyFileNames: checked('replyFileNames'),
+            bypassRestrictedChangelist: checked('bypassRestrictedChangelist'),
+            notifyMentionedOnly: checked('notifyMentionedOnly'),
+            notify: notify,
+            summaryFileLimit: limit,
+            user: {
+                enabled: checked('userEnabled'),
+                name: val('userName'),
+                icon: val('userIcon'),
+                forceUserHeader: checked('userForceUserHeader')
+            }
+        };
+        if (token) {
+            payload.token = token; // blank token on edit means "keep the stored one"
+        }
+        return payload;
+    }
+
+    function save(event) {
+        event.preventDefault();
+        var payload = collectForm();
+        if (!payload) {
+            return;
+        }
+        var button = document.getElementById('mm-save');
+        button.disabled = true;
+        api('/workspaces/' + encodeURIComponent(payload.id), 'PATCH', payload).then(function () {
+            document.getElementById('mm-dialog').close();
+            toast('ok', t('workspaceSavedSuccess'));
+            return load();
+        }).catch(function (e) {
+            var message = t('saveError') + ': ' + e.message;
+            var box = document.getElementById('mm-form-body');
+            var old = box.querySelector('.mm-alert');
+            if (old) { old.parentNode.removeChild(old); }
+            box.insertBefore(el('div', { class: 'mm-alert mm-alert-error', text: message }), box.firstChild);
+            box.scrollTop = 0;
+        }).then(function () {
+            button.disabled = false;
+        });
+    }
+
+    // ---- Delete -------------------------------------------------------------------
+    var deleting = null;
+
+    function confirmDelete(ws) {
+        deleting = ws;
+        document.getElementById('mm-confirm-title').textContent = t('deleteWorkspaceConfirmTitle');
+        document.getElementById('mm-confirm-text').textContent = t('deleteWorkspaceConfirmWarning', { workspaceId: ws.id });
+        document.getElementById('mm-confirm').showModal();
+    }
+
+    function doDelete() {
+        if (!deleting) {
+            return;
+        }
+        var id = deleting.id;
+        document.getElementById('mm-confirm').close();
+        api('/workspaces/' + encodeURIComponent(id), 'DELETE').then(function () {
+            toast('ok', t('workspaceDeletedSuccess'));
+            return load();
+        }).catch(function (e) {
+            notice('error', t('workspaceDeleteError') + ': ' + e.message, true);
+        });
+    }
+
+    // ---- Translations -------------------------------------------------------------
+    function loadStrings() {
+        var lang = (document.documentElement.lang || navigator.language || 'en').toLowerCase().split(/[-_]/)[0];
+        var langs = lang === 'en' ? ['en'] : [lang, 'en'];
+        var chain = Promise.reject();
+        langs.forEach(function (l) {
+            chain = chain.catch(function () {
+                return fetch(baseUrl + '/locales/' + l + '/configuration.json', { credentials: 'same-origin' })
+                    .then(function (r) { if (!r.ok) { throw new Error(); } return r.json(); });
+            });
+        });
+        return chain.then(function (json) {
+            if (json && json.mattermost) {
+                Object.keys(json.mattermost).forEach(function (k) {
+                    if (typeof json.mattermost[k] === 'string') { strings[k] = json.mattermost[k]; }
+                });
+            }
+        }).catch(function () { /* keep built-in English */ });
+    }
+
+    // ---- Boot ---------------------------------------------------------------------
+    document.getElementById('mm-add').addEventListener('click', function () { openEditor(null); });
+    document.getElementById('mm-form').addEventListener('submit', save);
+    document.getElementById('mm-cancel').addEventListener('click', function () { document.getElementById('mm-dialog').close(); });
+    document.getElementById('mm-confirm-cancel').addEventListener('click', function () { document.getElementById('mm-confirm').close(); });
+    document.getElementById('mm-confirm-ok').addEventListener('click', doDelete);
+
+    loadStrings().then(function () {
+        applyStrings();
+        if (!csrfToken()) {
+            notice('warn', t('csrfMissing'), true);
+        }
+        return load();
+    });
+})();
+</script>
