@@ -145,9 +145,14 @@ return [
     // Webhooks module, see Mattermost\Menu\Helper\MattermostMenuHelper for the roles).
     'menu_helpers' => [
         'mattermost' => [
+            'title'    => 'Mattermost',
             'target'   => '/mattermost/configuration',
             'priority' => 206,
-            'cssClass' => 'component',
+            // Menu entries get the classes "menuItem menuItem-<id> <cssClass>". A cssClass
+            // containing "component" would make the React menu route the click client-side
+            // (Swarm's own React pages); this entry is a server-rendered page, so keep it plain.
+            // public/custom/mattermost/mattermost.css hooks on menuItem-mattermost for the icon.
+            'cssClass' => 'mattermost',
         ],
     ],
     'service_manager' => [

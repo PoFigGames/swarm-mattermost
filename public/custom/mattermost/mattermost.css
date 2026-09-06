@@ -1,0 +1,30 @@
+/*
+ * Mattermost Perforce Swarm module
+ *
+ * Icon for the "Mattermost" entry in the Swarm navigation menu.
+ * Copy this folder to SWARM_ROOT/public/custom/mattermost/ - Swarm includes every CSS file
+ * under public/custom automatically (see "Menu helpers" in the Swarm documentation).
+ *
+ * The React menu renders every entry as
+ *   <li class="menuItem menuItem-<id> <cssClass>"><a><svg class="svgIcon <id>MenuIcon">...</svg>Title</a></li>
+ * and draws a generic "three dots" icon for ids it does not know. The rules below hide that
+ * icon and draw the Mattermost mark in the same 14px slot, in the colour of the built-in
+ * icons (palette grey[12]). The menu background stays light on hover, so the icon keeps its colour.
+ *
+ * The mark (mattermost.svg, resolved relative to this file) is the Mattermost icon from
+ * Simple Icons (https://simpleicons.org, CC0 1.0).
+ * Mattermost is a trademark of Mattermost, Inc.
+ */
+.menuItem.menuItem-mattermost .mattermostMenuIcon {
+    display: none;
+}
+
+.menuItem.menuItem-mattermost a::before {
+    content: '';
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin: 0 10px 0 20px;
+    vertical-align: text-bottom;
+    background: url('mattermost.svg') center / 14px 14px no-repeat;
+}
