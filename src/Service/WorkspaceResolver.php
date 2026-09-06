@@ -8,19 +8,16 @@
 namespace Mattermost\Service;
 
 use Application\Config\IConfigDefinition as IDef;
-use Application\Config\IDao;
-use Application\Connection\ConnectionFactory;
 use Application\Factory\InvokableService;
 use Application\Log\SwarmLogger;
-use Configurations\Model\IConfiguration;
 use Interop\Container\ContainerInterface;
 use Mattermost\Config\IConfig;
-use Record\Exception\NotFoundException as RecordNotFoundException;
+use Mattermost\Model\IConfiguration;
 
 /**
  * Normalises the Mattermost config into a unified workspace list.
  *
- * The UI-managed Configurations record ('mattermost') is the source of truth when it exists and has
+ * The configuration record (see IConfigurationStore) is the source of truth when it exists and has
  * at least one active workspace. Otherwise config.php is used, in one of two layouts:
  *
  *   'mattermost' => ['url' => ..., 'token' => ..., 'team' => ..., ...]           // single server
@@ -69,13 +66,28 @@ class WorkspaceResolver implements IWorkspaceResolver, InvokableService
      */
     private function resolveWorkspaces(): array
     {
-        // Check the P4-backed Configurations record first (UI-managed source of truth). Fall back to
-        // config.php when the record is absent or has no active workspaces (e.g. fresh installs).
+        // The record managed through the UI / REST API wins. Fall back to config.php when there is
+        // no record or it has no usable server (fresh installs, or config.php-only setups).
         $workspacesFromRecord = $this->resolveFromRecord();
         if ($workspacesFromRecord !== null) {
             return $workspacesFromRecord;
         }
+        return $this->getWorkspacesFromConfigFile();
+    }
 
+    /**
+     * @inheritDoc
+     */
+    public function hasConfiguredWorkspace(): bool
+    {
+        return !empty($this->getWorkspaces());
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getWorkspacesFromConfigFile(): array
+    {
         $config     = $this->services->get(IDef::CONFIG);
         $mattermost = $config[IConfig::MATTERMOST] ?? [];
         if (!is_array($mattermost)) {
@@ -94,65 +106,45 @@ class WorkspaceResolver implements IWorkspaceResolver, InvokableService
     }
 
     /**
-     * @inheritDoc
-     */
-    public function hasConfiguredWorkspace(): bool
-    {
-        return !empty($this->getWorkspaces());
-    }
-
-    /**
-     * Try to load workspaces from the P4-backed Configurations record. Returns the active workspace
-     * list if the record exists and has at least one active (non-deleted) workspace with a usable
-     * url and token; returns null otherwise so the caller falls back to config.php.
+     * Active workspaces from the module's configuration record, or null when the record is absent,
+     * unreadable or has no usable server.
      *
-     * @return array|null Active workspace list, or null to trigger fallback.
+     * @return array|null
      */
     private function resolveFromRecord(): ?array
     {
         $logger = $this->services->get(SwarmLogger::SERVICE);
         try {
-            // Read the record directly through the DAO. Configurations\Service\FetchConfig is not
-            // used on purpose: it merges the record with ConfigManager defaults, and ConfigManager
-            // only knows the keys defined by the Swarm core, so it fails for 'mattermost'.
-            $p4Admin = $this->services->get(ConnectionFactory::P4_ADMIN);
-            $record  = $this->services->get(IDao::CONFIGURATION_DAO)
-                ->fetchById(IConfig::MATTERMOST, $p4Admin)
-                ->toArray();
-        } catch (RecordNotFoundException $e) {
-            $logger->debug(self::LOG_PREFIX . ': no Configurations record, using config.php');
-            return null;
+            // getOrCreate() seeds the record from config.php on first use, so config.php-only
+            // setups keep working before anyone opens the page.
+            $record = $this->services->get(IConfigurationStore::SERVICE_NAME)->getOrCreate();
         } catch (\Throwable $e) {
-            // Catches both Exception and Error (e.g. P4 extension not yet available at bootstrap).
+            // Catches both Exception and Error (e.g. Perforce not available yet).
             $logger->warn(
-                self::LOG_PREFIX . ': unable to read the Configurations record, using config.php: '
-                . $e->getMessage()
+                self::LOG_PREFIX . ': unable to read the configuration record, using config.php: ' . $e->getMessage()
             );
             return null;
         }
-        $workspaces = $record[IConfiguration::WORKSPACES] ?? null;
+        $workspaces = $record->get(IConfiguration::WORKSPACES);
         if (!is_array($workspaces) || empty($workspaces)) {
             return null;
         }
         $active = [];
         foreach ($workspaces as $ws) {
-            // Record keys are camelCase (IConfiguration); snake_case is accepted as well.
-            if (!is_array($ws) || !empty($ws[IConfiguration::IS_DELETED]) || !empty($ws['is_deleted'])) {
+            if (!is_array($ws) || !empty($ws[IConfiguration::IS_DELETED])) {
                 continue;
             }
-            $id        = (string) ($ws[IConfig::ID] ?? IWorkspaceResolver::DEFAULT_ID);
+            $id        = (string) ($ws[IConfiguration::ID] ?? IWorkspaceResolver::DEFAULT_ID);
             $workspace = $this->normalise($id, $this->recordToWorkspace($ws));
             if ($workspace !== null) {
                 $active[] = $workspace;
             }
         }
         if (empty($active)) {
-            $logger->debug(self::LOG_PREFIX . ': Configurations record has no usable workspace, using config.php');
+            $logger->debug(self::LOG_PREFIX . ': configuration record has no usable server, using config.php');
             return null;
         }
-        $logger->debug(
-            self::LOG_PREFIX . ': loaded ' . count($active) . ' workspace(s) from the Configurations record'
-        );
+        $logger->debug(self::LOG_PREFIX . ': loaded ' . count($active) . ' server(s) from the configuration record');
         return $active;
     }
 
@@ -160,7 +152,7 @@ class WorkspaceResolver implements IWorkspaceResolver, InvokableService
      * Convert a workspace as stored in the Configurations record to the config.php shape read by the
      * Mattermost service and utility (snake_case keys, project_channels as a keyed dict).
      *
-     * @param array $ws Record workspace; camelCase (record) and snake_case (config.php) keys are accepted.
+     * @param array $ws Record workspace (camelCase keys, see IConfiguration).
      * @return array
      */
     private function recordToWorkspace(array $ws): array

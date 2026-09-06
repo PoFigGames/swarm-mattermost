@@ -6,18 +6,26 @@
  * @license     Please see LICENSE.txt in top-level readme folder of this distribution.
  */
 
+use Api\Controller\IndexController as ApiController;
+use Api\IRequest;
 use Application\Controller\IndexControllerFactory;
 use Application\Factory\InvokableServiceFactory;
 use Events\Listener\ListenerFactory as EventListenerFactory;
+use Laminas\Http\Request;
+use Laminas\Router\Http\Method;
 use Laminas\Router\Http\Segment;
 use Mattermost\Config\IConfig;
+use Mattermost\Controller\ConfigurationApi;
 use Mattermost\Controller\IndexController;
+use Mattermost\Filter\WorkspaceInputFilter;
 use Mattermost\Listener\Activity;
 use Mattermost\Listener\Comment;
 use Mattermost\Model\IMattermostDAO;
 use Mattermost\Model\MattermostDAO;
 use Mattermost\Service\Api;
+use Mattermost\Service\ConfigurationStore;
 use Mattermost\Service\IApi;
+use Mattermost\Service\IConfigurationStore;
 use Mattermost\Service\IMattermost;
 use Mattermost\Service\IUtility;
 use Mattermost\Service\IWorkspaceResolver;
@@ -126,11 +134,58 @@ return [
                     ],
                 ],
             ],
+            // REST API used by the page: /api/v11/mattermost/configuration[/workspaces/:workspaceId]
+            'api' => [
+                'type'          => 'literal',
+                'options'       => ['route' => ApiController::API_BASE],
+                'may_terminate' => false,
+                'child_routes'  => [
+                    'mattermost-api-configuration' => [
+                        'type'    => Segment::class,
+                        'options' => [
+                            'route'       => '/:version/mattermost/configuration',
+                            'constraints' => [IRequest::VERSION => 'v1[0-1]'],
+                            'defaults'    => [
+                                'controller' => ConfigurationApi::class,
+                                'action'     => 'configuration',
+                            ],
+                        ],
+                        'may_terminate' => true,
+                        'child_routes'  => [
+                            'workspaces' => [
+                                'type'    => Segment::class,
+                                'options' => [
+                                    'route'       => '/workspaces/:workspaceId',
+                                    'constraints' => ['workspaceId' => '[^/]+'],
+                                ],
+                                'may_terminate' => false,
+                                'child_routes'  => [
+                                    'patch-workspace' => [
+                                        'type'    => Method::class,
+                                        'options' => [
+                                            'verb'     => Request::METHOD_PATCH,
+                                            'defaults' => ['action' => 'patch-workspace'],
+                                        ],
+                                    ],
+                                    'delete-workspace' => [
+                                        'type'    => Method::class,
+                                        'options' => [
+                                            'verb'     => Request::METHOD_DELETE,
+                                            'defaults' => ['action' => 'delete-workspace'],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
         ],
     ],
     'controllers' => [
         'factories' => [
-            IndexController::class => IndexControllerFactory::class,
+            IndexController::class  => IndexControllerFactory::class,
+            ConfigurationApi::class => IndexControllerFactory::class,
         ],
     ],
     'view_manager' => [
@@ -162,15 +217,19 @@ return [
             Api::class               => InvokableServiceFactory::class,
             Mattermost::class        => InvokableServiceFactory::class,
             Utility::class           => InvokableServiceFactory::class,
-            MattermostDAO::class     => InvokableServiceFactory::class,
-            WorkspaceResolver::class => InvokableServiceFactory::class,
+            MattermostDAO::class        => InvokableServiceFactory::class,
+            WorkspaceResolver::class    => InvokableServiceFactory::class,
+            ConfigurationStore::class   => InvokableServiceFactory::class,
+            WorkspaceInputFilter::class => InvokableServiceFactory::class,
         ],
         'aliases' => [
-            IApi::SERVICE_NAME               => Api::class,
-            IMattermost::SERVICE_NAME        => Mattermost::class,
-            IUtility::SERVICE_NAME           => Utility::class,
-            IMattermostDAO::SERVICE_NAME     => MattermostDAO::class,
-            IWorkspaceResolver::SERVICE_NAME => WorkspaceResolver::class,
+            IApi::SERVICE_NAME                => Api::class,
+            IMattermost::SERVICE_NAME         => Mattermost::class,
+            IUtility::SERVICE_NAME            => Utility::class,
+            IMattermostDAO::SERVICE_NAME      => MattermostDAO::class,
+            IWorkspaceResolver::SERVICE_NAME  => WorkspaceResolver::class,
+            IConfigurationStore::SERVICE_NAME => ConfigurationStore::class,
+            WorkspaceInputFilter::SERVICE_NAME => WorkspaceInputFilter::class,
         ]
     ],
     EventListenerFactory::EVENT_LISTENER_CONFIG => [

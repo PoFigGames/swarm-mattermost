@@ -32,4 +32,12 @@ interface IWorkspaceResolver
      * @return bool True when at least one workspace has a non-blank url and token.
      */
     public function hasConfiguredWorkspace(): bool;
+
+    /**
+     * Valid workspaces defined in the 'mattermost' block of config.php only, ignoring the
+     * configuration record. Used to seed the record on first use.
+     *
+     * @return array List of workspace arrays, each with embedded 'id'.
+     */
+    public function getWorkspacesFromConfigFile(): array;
 }

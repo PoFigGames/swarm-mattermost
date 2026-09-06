@@ -125,7 +125,7 @@ $settings = [
     var root     = document.getElementById('mm-config');
     var settings = JSON.parse(root.getAttribute('data-settings') || '{}');
     var baseUrl  = settings.baseUrl || '';
-    var apiBase  = baseUrl + '/api/' + (settings.apiVersion || 'v11') + '/configurations/' + (settings.configId || 'mattermost');
+    var apiBase  = baseUrl + '/api/' + (settings.apiVersion || 'v11') + '/mattermost/configuration';
 
     // Built-in English strings. The page overlays the "mattermost" namespace of
     // /locales/<lang>/configuration.json when it is available, so translations added

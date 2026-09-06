@@ -16,10 +16,10 @@ use Throwable;
 
 /**
  * Renders the Mattermost configuration page. The page itself is a small standalone
- * front end (plain JavaScript, no build step) that talks to the Configurations REST API:
- *   GET    /api/v11/configurations/mattermost
- *   PATCH  /api/v11/configurations/mattermost/workspaces/{id}
- *   DELETE /api/v11/configurations/mattermost/workspaces/{id}
+ * front end (plain JavaScript, no build step) that talks to the module's own REST API:
+ *   GET    /api/v11/mattermost/configuration
+ *   PATCH  /api/v11/mattermost/configuration/workspaces/{id}
+ *   DELETE /api/v11/mattermost/configuration/workspaces/{id}
  * @package Mattermost\Controller
  */
 class IndexController extends AbstractActionController
